@@ -102,7 +102,6 @@ def enroll(request, course_id):
 
     return HttpResponseRedirect(reverse(viewname='onlinecourse:course_details', args=(course.id,)))
 
-
 # <HINT> Create a submit view to create an exam submission record for a course enrollment,
 # you may implement it based on following logic:
 #          Get user and course object, then get the associated enrollment object created when the user enrolled the course
@@ -113,12 +112,13 @@ def enroll(request, course_id):
 def submit(request, course_id):
     user = request.user
     course = get_object_or_404(Course, pk=course_id)
-    enrollment = Enrollment.objects.get(user=user, course=course)
-    submission = Submission.objects.create(enrollment=enrollment)
+    enrollment = Enrollment.objects.filter(user=user, course=course).get()
+    submission = Submission.objects.create(enrollment_id=enrollment.id)
     selected_choices = extract_answers(request)
     for choice in selected_choices:
         c = Choice.objects.filter(id = int(choice)).get()
         submission.choices.add(c)
+    submission.save()
     return HttpResponseRedirect(reverse(viewname='onlinecourse:show_exam_result', args=(course_id, submission.id)))
 
 # <HINT> A example method to collect the selected choices from the exam form from the request object
@@ -139,19 +139,16 @@ def extract_answers(request):
         # For each selected choice, check if it is a correct answer or not
         # Calculate the total score
 def show_exam_result(request, course_id, submission_id):
+    context = {}
     course = get_object_or_404(Course, pk=course_id)
     submission = get_object_or_404(Submission, pk=submission_id)
     selected_choices = Submission.objects.filter(id = submission_id).values_list('choices', flat=True)
     grade = 0
-    context = {}
-    for i in selected_choices:
-        if i.is_correct == True:
-            grade += 1
-
+    for i in submission.choices.all().filter(is_correct=True).values_list('question_id'):
+        grade += Question.objects.filter(id=i[0]).first().grade
     context['course'] = course
     context['selected_ids'] = selected_choices
     context['grade'] = grade
     return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
-
 
 
